@@ -4,14 +4,27 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-
         {
             "args": [ "--extensionDevelopmentPath=${workspaceFolder}" ],
-            "name": "run Extension",
+            "name": "Launch Client",
             "outFiles": [ "${workspaceFolder}/out/**/*.js" ],
             "preLaunchTask": "${defaultBuildTask}",
             "request": "launch",
             "type": "extensionHost"
+        },
+        {
+            "type": "node",
+            "request": "attach",
+            "name": "Attach to Server",
+            "port": 6009,
+            "restart": true,
+            "outFiles": [ "${workspaceFolder}/out/**/*.js" ]
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Client + Server",
+            "configurations": [ "Launch Client", "Attach to Server" ]
         }
     ]
 }

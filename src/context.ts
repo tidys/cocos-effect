@@ -8,7 +8,8 @@ import {
     LanguageClient,
     LanguageClientOptions,
     ServerOptions,
-    TransportKind
+    TransportKind,
+    ForkOptions
 } from 'vscode-languageclient/node';
 
 class CocosLanguageClient extends LanguageClient {
@@ -19,6 +20,7 @@ export class CocosEffectContext implements Disposable {
     client!: CocosLanguageClient;
 
     async activate(serverModule: string, outputChannel: OutputChannel) {
+        const debugOptions: ForkOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
         const serverOptions: ServerOptions = {
             run: {
                 module: serverModule,
@@ -27,6 +29,7 @@ export class CocosEffectContext implements Disposable {
             debug: {
                 module: serverModule,
                 transport: TransportKind.ipc,
+                options: debugOptions,
             }
         };
 
