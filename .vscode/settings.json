@@ -1,0 +1,19 @@
+{
+    "[json]": {
+        "editor.tabSize": 4,
+        "editor.indentSize": "tabSize"
+    },
+    "[jsonc]": {
+        "editor.tabSize": 4,
+        "editor.indentSize": "tabSize",
+        "editor.formatOnSave": true,
+        "editor.formatOnSaveMode": "modifications",
+        "editor.defaultFormatter": "vscode.json-language-features",
+    },
+    "[typescript]": {
+        "editor.formatOnSave": true,
+        "editor.formatOnSaveMode": "modifications",
+        "editor.defaultFormatter": "vscode.typescript-language-features",
+    },
+    "json.format.keepLines": true,
+}
