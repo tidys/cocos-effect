@@ -16,4 +16,5 @@
         "editor.defaultFormatter": "vscode.typescript-language-features",
     },
     "json.format.keepLines": true,
+    "justAntlr.useBuildCompileCache": false
 }
