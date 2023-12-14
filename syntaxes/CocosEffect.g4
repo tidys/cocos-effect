@@ -1,44 +1,38 @@
 grammar CocosEffect;
-main: ((SINGLE_LINE_COMMENT | effect | program) NEWLINE)*;
+main: (COMMENT | effect | SPACE* NEWLINE | SPACE+)* EOF;
+effect:
+	'CCEffect' SPACE+ RANGE_BEGIN (SPACE* NEWLINE)* (
+		(SPACE | NEWLINE)
+		| yaml
+	) RANGE_END;
+yaml: (yaml_key_value)*;
+yaml_key_value:
+	(SPACE | NEWLINE)* yaml_key COLON (
+		SPACE+
+		| SPACE? NEWLINE?
+		| (SPACE | NEWLINE)*
+	) yaml_value;
+yaml_key: ID;
+yaml_value:
+	(NUMBER | STRING | ID) NEWLINE*
+	| yaml_array1
+	| (yaml_array2)+
+	| yaml_object;
 
-effect: 'CCEffect' ' '+ '%{' techniques '}%';
-techniques: 'techniques:' (passes)+;
-passes: '- passes:' ('- ' pass)+;
-pass: vert frag blendState? rasterizerState? properties?;
-
-vert: 'vert: ' Identifier;
-
-frag: 'frag: ' Identifier;
-
-blendState: 'blendState:' targets?;
-targets: 'targets:' blend?;
-blend: '- blend:' Boolean;
-
-rasterizerState: 'rasterizerState:' cullMode?;
-cullMode: 'cullMode:' 'none';
-
-properties: 'properties:' property*;
-property: Identifier ':' '{' value editor? '}';
-value: 'value' ':' Number | Boolean | vec2 | vec3 | vec4;
-editor: 'editor' ':' '{' editor_type? '}';
-editor_type: 'type' ':' '"color"';
-
-vec2: '[' Number ',' Number ']';
-vec3: '[' Number ',' Number ',' Number ']';
-vec4: '[' Number ',' Number ',' Number ',' Number ']';
-
-program: KEY_CCPROGRAM ' ' SYMBOL_PERCENTAGE LCB RCB;
-
-KEY_CCEFFECT: 'CCEffect';
-KEY_CCPROGRAM: 'CCProgram';
-SYMBOL_PERCENTAGE: '%';
-NEWLINE: [\r\n]+;
-SINGLE_LINE_COMMENT: '//' ~[\r\n]* -> channel(HIDDEN);
-Identifier: [a-zA-Z_] [a-zA-Z_0-9]*;
-LCB: '{';
-RCB: '}';
-KEY_TECHNIQUES: 'techniques:';
-KEY_PASSES: '- passes:';
-KEY_VERT: 'vert:';
-Boolean: 'true' | 'false';
-Number: ('-' | '+')? [0-9]+ ('.' [0-9]*)?;
+yaml_array1: '[' NUMBER (',' NUMBER)* ']' NEWLINE*;
+yaml_array2:
+	YAML_ARRAY_FLAG (SPACE+ (NEWLINE)* yaml_key_value)+;
+yaml_object:
+	'{' (SPACE | NEWLINE)* yaml_key_value (
+		(SPACE | NEWLINE)* ',' SPACE* yaml_key_value
+	)* (SPACE | NEWLINE)* '}' NEWLINE*;
+YAML_ARRAY_FLAG: SPACE* '-';
+COMMENT: '//' ~[\r\n]* '\r'? '\n'?;
+SPACE: ' ';
+NEWLINE: ('\r\n' | '\r' | '\n');
+RANGE_BEGIN: '%{';
+RANGE_END: '}%';
+STRING: '"' ~[\r\n"]* '"';
+NUMBER: ('-' | '+')? [0-9]+ ('.' [0-9]*)?;
+COLON: ':';
+ID: [a-zA-Z_] [a-zA-Z_0-9-]*;
