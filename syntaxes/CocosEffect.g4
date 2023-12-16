@@ -1,5 +1,5 @@
 grammar CocosEffect;
-main: (COMMENT | effect | SPACE* NEWLINE | SPACE+)* EOF;
+main: (COMMENT | effect | program+ | SPACE* NEWLINE | SPACE+)* EOF;
 effect:
 	'CCEffect' SPACE+ RANGE_BEGIN (SPACE* NEWLINE)* (
 		(SPACE | NEWLINE)
@@ -15,14 +15,15 @@ yaml_key_value:
 yaml_key: ID;
 yaml_value:
 	(NUMBER | STRING | ID) NEWLINE*
-	| yaml_array1
-	| (yaml_array2)+
-	| yaml_object;
+	| yaml_array_inline
+	| (yaml_array)+
+	| yaml_object_inline
+	| yaml_key_value;
 
-yaml_array1: '[' NUMBER (',' NUMBER)* ']' NEWLINE*;
-yaml_array2:
-	YAML_ARRAY_FLAG (SPACE+ (NEWLINE)* yaml_key_value)+;
-yaml_object:
+yaml_array_inline:
+	'[' (NUMBER | ID) (',' (NUMBER | ID))* ']' NEWLINE*;
+yaml_array: YAML_ARRAY_FLAG (SPACE+ (NEWLINE)* yaml_key_value)+;
+yaml_object_inline:
 	'{' (SPACE | NEWLINE)* yaml_key_value (
 		(SPACE | NEWLINE)* ',' SPACE* yaml_key_value
 	)* (SPACE | NEWLINE)* '}' NEWLINE*;
@@ -34,5 +35,8 @@ RANGE_BEGIN: '%{';
 RANGE_END: '}%';
 STRING: '"' ~[\r\n"]* '"';
 NUMBER: ('-' | '+')? [0-9]+ ('.' [0-9]*)?;
+BOOL: ('true' | 'false');
 COLON: ':';
 ID: [a-zA-Z_] [a-zA-Z_0-9-]*;
+
+program: 'CCProgram' SPACE+ ID SPACE+ RANGE_BEGIN RANGE_END;

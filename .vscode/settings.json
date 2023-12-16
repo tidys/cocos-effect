@@ -16,5 +16,8 @@
         "editor.defaultFormatter": "vscode.typescript-language-features",
     },
     "json.format.keepLines": true,
-    "justAntlr.useBuildCompileCache": false
+    "justAntlr.useBuildCompileCache": false,
+    "justAntlr.g4": "e:\\proj\\cocos-effect\\syntaxes\\CocosEffect.g4",
+    "justAntlr.rule": "main",
+    "justAntlr.file": "e:\\proj\\cocos-effect\\samples\\test.effect"
 }
