@@ -1,10 +1,10 @@
 import { CheckEffectField } from "../core/check-effect-field";
 import { MyParser } from "../core/parser";
-import { isProgramName } from "../core/util";
+import { isVarName } from "../core/util";
 import { FieldType, ICompletionType, Scheme, } from "./interfaces";
 function checkChunk(parser: MyParser, programName: string): string[] {
     const ret: string[] = [];
-    if (!isProgramName(programName)) {
+    if (!isVarName(programName)) {
         ret.push(`无效的program:${programName}`);
     }
     if (!parser.getProgramChunk(programName)) {
@@ -52,7 +52,7 @@ export const effect_scheme: Scheme = {
                                     required: false, type: ICompletionType.Object,
                                     childFieldType: FieldType.Exist,
                                     children: {
-                                        'value': { desc: 'value desc', required: true, type: ICompletionType.Scalar },
+                                        'value': { desc: 'value desc', required: true, type: ICompletionType.String_Number_Bool_Vec2_Vec3_Vec4 },
                                         'linear': { desc: 'linear desc', required: false, type: ICompletionType.Bool },
                                         'target': { desc: 'target desc', required: false, type: ICompletionType.String },
                                         'editor': {

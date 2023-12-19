@@ -3,7 +3,7 @@ import { Editor } from "./editor";
 import * as  yaml from 'yaml-ast-parser';
 import { ICompletion } from "../builtin/interfaces";
 import { CheckEffectField, CompletionConfig } from "./check-effect-field";
-import { isProgramName } from "./util";
+import { isVarName } from "./util";
 
 enum ChunkType {
     None = 'none',
@@ -230,7 +230,7 @@ export class MyParser {
         while (this.currentIndex < this.totalLen) {
             const offset = this.currentIndex;
             if (this.nextIsSpace() || this.nextIsNewLine()) {
-                if (isProgramName(programName)) {
+                if (isVarName(programName)) {
                     ret.name.text = programName;
                     ret.name.endOffset = offset;
                     break;

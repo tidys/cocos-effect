@@ -7,7 +7,7 @@ export enum ICompletionType {
     /**
      * 标量类型，包括：string, number, bool, vec2, vec3, vec4
      */
-    Scalar = 'scalar',
+    String_Number_Bool_Vec2_Vec3_Vec4 = 'scalar',
     String = 'string',
     Bool = 'bool',
     Number = 'number',

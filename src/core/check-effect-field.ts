@@ -5,6 +5,7 @@ import { Editor } from "./editor";
 import { FieldType, ICompletion, ICompletionType, Scheme } from "../builtin/interfaces";
 import { effect_scheme } from "../builtin/effect";
 import { MyParser } from "./parser";
+import { isNumber, isString, isVarName } from "./util";
 
 export class CompletionConfig {
     public start: number;
@@ -91,12 +92,127 @@ export class CheckEffectField {
             }
             if (scheme.type === ICompletionType.String) {
                 // string
+                this.checkString(yamlNode, scheme, key);
             } else if (scheme.type === ICompletionType.Number) {
                 // number
+                this.checkNumber(yamlNode, scheme, key);
             } else if (scheme.type === ICompletionType.Bool) {
                 // boolean
+                this.checkBool(yamlNode, scheme, key);
+            } else if (scheme.type === ICompletionType.Vec2) {
+                // vec2
+                this.checkVec(yamlNode, scheme, key, 2);
+            } else if (scheme.type === ICompletionType.Vec3) {
+                // vec3
+                this.checkVec(yamlNode, scheme, key, 3);
+            } else if (scheme.type === ICompletionType.Vec4) {
+                // vec4
+                this.checkVec(yamlNode, scheme, key, 4);
+            } else if (scheme.type === ICompletionType.String_Number_Bool_Vec2_Vec3_Vec4) {
+                // string_number_bool_vec2_vec3_vec4
+                this.checkScalar(yamlNode, scheme, key, true);
             }
         }
+    }
+    private _checkEmpty(yamlNode: yaml.YAMLNode, key: string, diagnostic: boolean = true): boolean {
+        if (yamlNode.startPosition === -1 || yamlNode.endPosition === -1) {
+            diagnostic && this.addDiagnostic(yamlNode.parent.key.startPosition, yamlNode.parent.key.endPosition, `${key}不能为空`);
+            return false;
+        }
+        return true;
+    }
+    private checkScalar(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true): boolean {
+        if (!this._checkEmpty(yamlNode, key, diagnostic)) {
+            return false;
+        }
+        if (this.checkString(yamlNode, scheme, key, false)) {
+            return true;
+        }
+        if (this.checkNumber(yamlNode, scheme, key, false)) {
+            return true;
+        }
+        if (this.checkBool(yamlNode, scheme, key, false)) {
+            return true;
+        }
+        if (this.checkVec(yamlNode, scheme, key, 2, false)) {
+            return true;
+        }
+        if (this.checkVec(yamlNode, scheme, key, 3, false)) {
+            return true;
+        }
+        if (this.checkVec(yamlNode, scheme, key, 4, false)) {
+            return true;
+        }
+        diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `${key}的类型无效`);
+        return false;
+    }
+    private checkString(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true): boolean {
+        if (!this._checkEmpty(yamlNode, key, diagnostic)) {
+            return false;
+        }
+        if (yamlNode.kind !== yaml.Kind.SCALAR) {
+            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
+            return false;
+        }
+        const scalar: yaml.YAMLScalar = yamlNode as yaml.YAMLScalar;
+        if (!isString(scalar.value)) {
+            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
+            return false;
+        }
+        return true;
+    }
+
+    private checkBool(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true): boolean {
+        if (!this._checkEmpty(yamlNode, key, diagnostic)) {
+            return false;
+        }
+        if (yamlNode.kind !== yaml.Kind.SCALAR) {
+            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
+            return false;
+        }
+        const scalar: yaml.YAMLScalar = yamlNode as yaml.YAMLScalar;
+        if (scalar.value !== 'true' && scalar.value !== 'false') {
+            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
+            return false;
+        }
+        return true;
+    }
+
+    private checkVec(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, num: number, diagnostic: boolean = true): boolean {
+        if (!this._checkEmpty(yamlNode, key, diagnostic)) {
+            return false;
+        }
+        if (yamlNode.kind !== yaml.Kind.SEQ) {
+            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
+            return false;
+        }
+        const seq: yaml.YAMLSequence = yamlNode as yaml.YAMLSequence;
+        if (seq.items.length !== num) {
+            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
+            return false;
+        }
+        let ret = true;
+        for (let i = 0; i < seq.items.length; i++) {
+            const item = seq.items[i];
+            if (!this.checkNumber(item, scheme, key, diagnostic)) {
+                ret = false;
+            }
+        }
+        return ret;
+    }
+    private checkNumber(item: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true): boolean {
+        if (!this._checkEmpty(item, key, diagnostic)) {
+            return false;
+        }
+        if (item.kind !== yaml.Kind.SCALAR) {
+            diagnostic && this.addDiagnostic(item.startPosition, item.endPosition, `必须是常量`);
+            return false;
+        }
+        if (!isNumber(item.value)) {
+            diagnostic && this.addDiagnostic(item.startPosition, item.endPosition, `必须是数值`);
+            return false;
+        }
+        return true;
     }
     private checkArray(data: yaml.YAMLSequence, scheme: Scheme) {
         for (let i = 0; i < data.items.length; i++) {
@@ -122,6 +238,9 @@ export class CheckEffectField {
         for (let i = 0; i < map.mappings.length; i++) {
             const mapping = map.mappings[i];
             const mapping_key = mapping.key.value;
+            if (!isVarName(mapping_key)) {
+                this.addDiagnostic(mapping.key.startPosition, mapping.key.endPosition, `无效的名字:${mapping_key}`);
+            }
             const idx = missingKeys.findIndex(el => el === mapping_key);
             if (idx !== -1) {
                 missingKeys.splice(idx, 1);
