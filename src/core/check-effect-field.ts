@@ -288,10 +288,10 @@ export class CheckEffectField {
                     child_scheme = scheme.children[ANY_TAG];
                 } else {
                     child_scheme = scheme.children[mapping_key];
-                    const hoverString = this.getHoverString(child_scheme);
-                    this.addHoverConfig(mapping.key.startPosition, mapping.key.endPosition, hoverString);
                 }
                 if (child_scheme) {
+                    const hoverString = this.getHoverString(child_scheme);
+                    this.addHoverConfig(mapping.key.startPosition, mapping.key.endPosition, hoverString);
                     this.doCompletionsAndCheckType(mapping.value, child_scheme, mapping_key);
                 } else {
                     if (scheme.childFieldType && scheme.childFieldType === FieldType.Exist) {
