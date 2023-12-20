@@ -1,3 +1,4 @@
+import { YAMLNode } from "yaml-ast-parser";
 import { CheckEffectField } from "../core/check-effect-field";
 
 export enum ICompletionType {
@@ -8,6 +9,7 @@ export enum ICompletionType {
      * 标量类型，包括：string, number, bool, vec2, vec3, vec4
      */
     String_Number_Bool_Vec2_Vec3_Vec4 = 'scalar',
+    Vec2_Vec3_Vec4 = 'vector',
     String = 'string',
     Bool = 'bool',
     Number = 'number',
@@ -33,7 +35,19 @@ export enum FieldType {
     Exist = 'exist',
 }
 export interface Scheme {
+    /**
+     * 字段含义
+     */
     desc: string;
+
+    /**
+     * 默认值
+     */
+    defaultValue?: string | number | boolean;
+    /**
+     * 可选值
+     */
+    values?: string[];
     /**
      * 定义自己的类型
      */
@@ -51,7 +65,7 @@ export interface Scheme {
      */
     children?: Record<string, Scheme>;
 
-    check?: (a: CheckEffectField, value: string) => string[];
+    check?: (field: CheckEffectField, node: YAMLNode) => string[];
 }
 
 

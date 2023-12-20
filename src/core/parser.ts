@@ -1,8 +1,8 @@
-import { Diagnostic, DiagnosticSeverity, Range, TextDocument, Uri } from "vscode";
+import { Diagnostic, DiagnosticSeverity, Hover, MarkdownString, Range, TextDocument, Uri } from "vscode";
 import { Editor } from "./editor";
 import * as  yaml from 'yaml-ast-parser';
 import { ICompletion } from "../builtin/interfaces";
-import { CheckEffectField, CompletionConfig } from "./check-effect-field";
+import { CheckEffectField, CompletionConfig, HoverConfig, ProvideConfig } from "./check-effect-field";
 import { isVarName } from "./util";
 
 enum ChunkType {
@@ -48,9 +48,12 @@ class MyChunkEffect extends MyChunk {
             return null;
         }
         // 要找到最小的区间
-        const cfg: CompletionConfig[] = [];
-        for (let i = 0; i < this.field.completionConfig.length; ++i) {
-            const item = this.field.completionConfig[i];
+        return this.findConfig(this.field.completionConfig, offset) as CompletionConfig;
+    }
+    private findConfig(config_array: ProvideConfig[], offset: number): ProvideConfig | null {
+        const cfg: ProvideConfig[] = [];
+        for (let i = 0; i < config_array.length; ++i) {
+            const item = config_array[i];
             if (item.start <= offset && offset <= item.end) {
                 cfg.push(item);
             }
@@ -68,6 +71,12 @@ class MyChunkEffect extends MyChunk {
             });
             return min;
         }
+    }
+    public hoverAt(offset: number): HoverConfig | null {
+        if (!this.field) {
+            return null;
+        }
+        return this.findConfig(this.field.hoverConfig, offset) as HoverConfig;
     }
 }
 
@@ -102,6 +111,20 @@ export class MyParser {
             }
         }
         return [];
+    }
+    public getHover(offset: number): Hover {
+        const contents: MarkdownString[] = [];
+        for (let i = 0; i < this.chunks.length; ++i) {
+            const chunk = this.chunks[i];
+            if (chunk instanceof MyChunkEffect) {
+                const ret = chunk.hoverAt(offset);
+                if (ret) {
+                    contents.push(ret.desc);
+                }
+            }
+        }
+        const hover = new Hover(contents);
+        return hover;
     }
     private checkProgramDiagnosis(document: TextDocument): void {
         //

@@ -1,4 +1,4 @@
-import { Diagnostic, Range, TextDocument } from "vscode";
+import { Diagnostic, MarkdownString, Range, TextDocument } from "vscode";
 import { YAMLDocument, YAMLNode } from "yaml-ast-parser";
 import * as yaml from "yaml-ast-parser";
 import { Editor } from "./editor";
@@ -7,14 +7,19 @@ import { effect_scheme } from "../builtin/effect";
 import { MyParser } from "./parser";
 import { isNumber, isString, isVarName } from "./util";
 
-export class CompletionConfig {
+export class ProvideConfig {
     public start: number;
     public end: number;
-    public completions: ICompletion[] = [];
     constructor(start: number, end: number) {
         this.start = start;
         this.end = end;
     }
+}
+export class CompletionConfig extends ProvideConfig {
+    public completions: ICompletion[] = [];
+}
+export class HoverConfig extends ProvideConfig {
+    public desc: MarkdownString = new MarkdownString();
 }
 const ANY_TAG = '*';
 
@@ -36,7 +41,12 @@ export class CheckEffectField {
         const diagnostic = new Diagnostic(range, message);
         this.diagnostic.push(diagnostic);
     }
-
+    public hoverConfig: HoverConfig[] = [];
+    private addHoverConfig(start: number, end: number, str: string) {
+        const cfg = new HoverConfig(start + this.offset, end + this.offset);
+        cfg.desc.value = str;
+        this.hoverConfig.push(cfg);
+    }
     public completionConfig: CompletionConfig[] = [];
     private addCompletionConfig(start: number, end: number, scheme: Scheme) {
         const cfg = new CompletionConfig(start + this.offset, end + this.offset);
@@ -82,14 +92,6 @@ export class CheckEffectField {
             }
             this.checkArray(yamlNode as yaml.YAMLSequence, scheme);
         } else {
-            if (scheme.check) {
-                const result = scheme.check(this, yamlNode.value);
-                if (result.length > 0) {
-                    result.forEach(el => {
-                        this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, el);
-                    });
-                }
-            }
             if (scheme.type === ICompletionType.String) {
                 // string
                 this.checkString(yamlNode, scheme, key);
@@ -111,6 +113,16 @@ export class CheckEffectField {
             } else if (scheme.type === ICompletionType.String_Number_Bool_Vec2_Vec3_Vec4) {
                 // string_number_bool_vec2_vec3_vec4
                 this.checkScalar(yamlNode, scheme, key, true);
+            } else if (scheme.type === ICompletionType.Vec2_Vec3_Vec4) {
+                this.checkVector(yamlNode, scheme, key, true);
+            }
+            if (scheme.check) {
+                const result = scheme.check(this, yamlNode);
+                if (result.length > 0) {
+                    result.forEach(el => {
+                        this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, el);
+                    });
+                }
             }
         }
     }
@@ -121,6 +133,23 @@ export class CheckEffectField {
         }
         return true;
     }
+    public checkVector(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true, diagnosticPrefix: string = ""): boolean {
+        if (!this._checkEmpty(yamlNode, key, diagnostic)) {
+            return false;
+        }
+        if (this.checkVec(yamlNode, scheme, key, 2, false, diagnosticPrefix)) {
+            return true;
+        }
+        if (this.checkVec(yamlNode, scheme, key, 3, false, diagnosticPrefix)) {
+            return true;
+        }
+        if (this.checkVec(yamlNode, scheme, key, 4, false, diagnosticPrefix)) {
+            return true;
+        }
+        diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `${diagnosticPrefix}${key}的类型无效`);
+        return false;
+    }
+
     private checkScalar(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true): boolean {
         if (!this._checkEmpty(yamlNode, key, diagnostic)) {
             return false;
@@ -155,9 +184,16 @@ export class CheckEffectField {
             return false;
         }
         const scalar: yaml.YAMLScalar = yamlNode as yaml.YAMLScalar;
-        if (!isString(scalar.value)) {
+        const str = scalar.value;
+        if (!isString(str)) {
             diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
             return false;
+        }
+        if (scheme.values) {
+            if (!scheme.values.find(el => el === str)) {
+                diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `${str}必须是[${scheme.values.join(', ')}]中的一个`);
+                return false;
+            }
         }
         return true;
     }
@@ -178,38 +214,38 @@ export class CheckEffectField {
         return true;
     }
 
-    private checkVec(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, num: number, diagnostic: boolean = true): boolean {
+    public checkVec(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, num: number, diagnostic: boolean = true, diagnosticPrefix: string = ""): boolean {
         if (!this._checkEmpty(yamlNode, key, diagnostic)) {
             return false;
         }
         if (yamlNode.kind !== yaml.Kind.SEQ) {
-            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
+            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `${diagnosticPrefix}必须是${scheme.type}`);
             return false;
         }
         const seq: yaml.YAMLSequence = yamlNode as yaml.YAMLSequence;
         if (seq.items.length !== num) {
-            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
+            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `${diagnosticPrefix}必须是${scheme.type}`);
             return false;
         }
         let ret = true;
         for (let i = 0; i < seq.items.length; i++) {
             const item = seq.items[i];
-            if (!this.checkNumber(item, scheme, key, diagnostic)) {
+            if (!this.checkNumber(item, scheme, key, diagnostic, diagnosticPrefix)) {
                 ret = false;
             }
         }
         return ret;
     }
-    private checkNumber(item: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true): boolean {
+    private checkNumber(item: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true, diagnosticPrefix: string = ""): boolean {
         if (!this._checkEmpty(item, key, diagnostic)) {
             return false;
         }
         if (item.kind !== yaml.Kind.SCALAR) {
-            diagnostic && this.addDiagnostic(item.startPosition, item.endPosition, `必须是常量`);
+            diagnostic && this.addDiagnostic(item.startPosition, item.endPosition, `${diagnosticPrefix}必须是常量`);
             return false;
         }
         if (!isNumber(item.value)) {
-            diagnostic && this.addDiagnostic(item.startPosition, item.endPosition, `必须是数值`);
+            diagnostic && this.addDiagnostic(item.startPosition, item.endPosition, `${diagnosticPrefix}必须是数值`);
             return false;
         }
         return true;
@@ -252,6 +288,8 @@ export class CheckEffectField {
                     child_scheme = scheme.children[ANY_TAG];
                 } else {
                     child_scheme = scheme.children[mapping_key];
+                    const hoverString = this.getHoverString(child_scheme);
+                    this.addHoverConfig(mapping.key.startPosition, mapping.key.endPosition, hoverString);
                 }
                 if (child_scheme) {
                     this.doCompletionsAndCheckType(mapping.value, child_scheme, mapping_key);
@@ -268,5 +306,18 @@ export class CheckEffectField {
                 this.addDiagnostic(map.startPosition, map.endPosition, `缺少${el}字段`);
             });
         }
+    }
+    private getHoverString(scheme: Scheme) {
+        let hoverString = "";
+        if (scheme.desc) {
+            hoverString += `${scheme.desc}\n`;
+        }
+        if (scheme.values) {
+            hoverString += `- 可选值: ${scheme.values.join(', ')}\n`;
+        }
+        if (scheme.defaultValue !== undefined) {
+            hoverString += `- 默认值: ${scheme.defaultValue}\n`;
+        }
+        return hoverString;
     }
 }

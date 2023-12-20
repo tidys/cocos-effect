@@ -1,4 +1,4 @@
-import { Diagnostic, Position, Range, TextDocument, Uri, window } from "vscode";
+import { Diagnostic, Hover, Position, Range, TextDocument, Uri, window } from "vscode";
 import { CocosEffectLexer } from "../antlr/CocosEffectLexer";
 import { CocosEffectParser, MainContext } from "../antlr/CocosEffectParser";
 import {
@@ -142,6 +142,14 @@ export class DocumentInfo {
             return this.myParser.getCompletions(offset);
         } else {
             return [];
+        }
+    }
+    public getHover(position: Position): Hover | null {
+        if (this.document && this.myParser) {
+            const offset = this.document.offsetAt(position);
+            return this.myParser.getHover(offset);
+        } else {
+            return null;
         }
     }
 
