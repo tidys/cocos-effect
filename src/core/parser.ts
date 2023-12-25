@@ -4,6 +4,7 @@ import * as  yaml from 'yaml-ast-parser';
 import { ICompletion } from "../builtin/interfaces";
 import { CheckEffectField, CompletionConfig, HoverConfig, ProvideConfig } from "./check-effect-field";
 import { isVarName } from "./util";
+import { GrammarColor } from "./grammar-color";
 
 enum ChunkType {
     None = 'none',
@@ -90,7 +91,9 @@ export class MyParser {
     public text: string;
     private totalLen: number;
     private chunks: MyChunk[] = [];
-    constructor(text: string) {
+    private grammar: GrammarColor;
+    constructor(grammar: GrammarColor, text: string) {
+        this.grammar = grammar;
         this.text = text;
         this.totalLen = this.text.length;
         this.init();
@@ -149,7 +152,7 @@ export class MyParser {
                 }
                 Editor.getDiagnosticCollection().set(document.uri, items);
             } else {
-                chunk.field = new CheckEffectField(document, chunk.value.startOffset, ret, this);
+                chunk.field = new CheckEffectField(this.grammar, document, chunk.value.startOffset, ret, this);
                 chunk.field.checkField();
 
             }
@@ -286,7 +289,7 @@ export class MyParser {
     private log() {
         this.chunks.map(chunk => {
             if (chunk.ok) {
-                console.log(`chunk: ${chunk.name.text}: ${chunk.value.text}`);
+                // console.log(`chunk: ${chunk.name.text}: ${chunk.value.text}`);
             } else {
                 console.log(`chunk error:${chunk.err.startOffset} at ${chunk.err.text}`);
             }

@@ -1,4 +1,4 @@
-import { Diagnostic, Hover, Position, Range, TextDocument, Uri, window } from "vscode";
+import { Diagnostic, Hover, Position, Range, TextDocument, TextEditor, TextEditorDecorationType, Uri, window } from "vscode";
 import { CocosEffectLexer } from "../antlr/CocosEffectLexer";
 import { CocosEffectParser, MainContext } from "../antlr/CocosEffectParser";
 import {
@@ -18,6 +18,7 @@ import { ScopeChunk } from "../scope/chunk/scope-chunks";
 import { ScopeRoot } from "../scope/scope-root";
 import { MyParser } from "./parser";
 import { ICompletion } from "../builtin/interfaces";
+import { GrammarColor } from "./grammar-color";
 
 type ANTLRErrorCallback = (line: number, charPositionInLine: number, msg: string) => void;
 class DocumentErrorListener implements ANTLRErrorListener<Token> {
@@ -32,22 +33,35 @@ class DocumentErrorListener implements ANTLRErrorListener<Token> {
 export class DocumentInfo {
     private readonly uri: Uri;
     private invalid = false;
+    private grammarColor: GrammarColor = new GrammarColor();
     private lastProcessedVersion = -1;
     public constructor(uri: Uri) {
         this.uri = uri;
     }
-
+    private decorationArray: TextEditorDecorationType[] = [];
+    public doSyntaxesColor(editor: TextEditor) {
+        this.decorationArray.forEach(item => {
+            item.dispose(); // 的确可以清理掉
+        });
+        this.decorationArray.length = 0;
+        this.grammarColor.yamlConfig.forEach(cfg => {
+            const decoration = window.createTextEditorDecorationType(cfg.render);
+            this.decorationArray.push(decoration);
+            editor.setDecorations(decoration, cfg.range);
+        });
+    }
     public myParser: MyParser | null = null;
     public processElements(document: TextDocument): void {
         if (document.version > this.lastProcessedVersion || this.invalid) {
             Editor.getDiagnosticCollection().clear();
+            this.grammarColor.reset();
             this.processDocument(document);
             const useRegParseRoot = true;
             if (useRegParseRoot) {
                 const str = this.getText();
                 // const programRegex = /\s*CCProgram\s+([\w-]+)\s+%{\s+([\s\S]+?)\s+}%/g;
                 // const match: RegExpExecArray | null = programRegex.exec(str);
-                this.myParser = new MyParser(str);
+                this.myParser = new MyParser(this.grammarColor, str);
                 const b = this.myParser.getError(document);
                 if (!b) {
                     this.myParser.checkDiagnosis(document);
@@ -65,7 +79,6 @@ export class DocumentInfo {
     private parser: CocosEffectParser | null = null;
     private processDocument(document: TextDocument): void {
         this.document = document;
-
     }
     private createLexer(): CocosEffectLexer {
         const charStream = new ANTLRInputStream(this.getText());

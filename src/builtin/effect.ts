@@ -3,6 +3,7 @@ import { CheckEffectField } from "../core/check-effect-field";
 import { MyParser } from "../core/parser";
 import { isVarName } from "../core/util";
 import { FieldType, ICompletionType, Scheme, } from "./interfaces";
+import { CheckOptions, TypeCheck } from "../core/type-check";
 function checkChunk(parser: MyParser, programName: string): string[] {
     const ret: string[] = [];
     if (!isVarName(programName)) {
@@ -299,13 +300,18 @@ export const effect_scheme: Scheme = {
                                                         if (propertyValueNode.kind !== Kind.MAPPING) { return []; }
                                                         const key_value_node = propertyValueNode as YAMLMapping;
                                                         // 校验值
+                                                        const opts = new CheckOptions(key_value_node.value);
+                                                        opts.diagnosticPrefix = `editor.type=${value}, `;
+                                                        opts.key = key_value_node.key.value;
+                                                        opts.diagnosticCallback = field.addDiagnostic.bind(field);
                                                         if (value === 'color') {
                                                             // 必须是vec4类型
                                                             const scheme: Scheme = {
                                                                 desc: ``,
                                                                 type: ICompletionType.Vec4,
                                                             };
-                                                            field.checkVec(key_value_node.value, scheme, key_value_node.key.value, 4, true, `editor.type=${value}, `);
+                                                            opts.scheme = scheme;
+                                                            TypeCheck.checkVec(4, opts);
                                                             // 错误已经在check中处理了
                                                             return [];
                                                         } else if (value === 'vector') {
@@ -313,7 +319,9 @@ export const effect_scheme: Scheme = {
                                                                 desc: ``,
                                                                 type: ICompletionType.Vec2_Vec3_Vec4,
                                                             };
-                                                            field.checkVector(key_value_node.value, scheme, key_value_node.key.value, true, `editor.type=${value}, `);
+
+                                                            opts.scheme = scheme;
+                                                            TypeCheck.checkVector(opts);
                                                             return [];
                                                         }
                                                         return [];

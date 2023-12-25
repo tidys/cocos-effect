@@ -1,4 +1,4 @@
-import { Diagnostic, MarkdownString, Range, TextDocument } from "vscode";
+import { Diagnostic, MarkdownString, Position, Range, TextDocument } from "vscode";
 import { YAMLDocument, YAMLNode } from "yaml-ast-parser";
 import * as yaml from "yaml-ast-parser";
 import { Editor } from "./editor";
@@ -6,6 +6,8 @@ import { FieldType, ICompletion, ICompletionType, Scheme } from "../builtin/inte
 import { effect_scheme } from "../builtin/effect";
 import { MyParser } from "./parser";
 import { isNumber, isString, isVarName } from "./util";
+import { GrammarColor, GrammarYamlKind } from "./grammar-color";
+import { CheckOptions, TypeCheck } from "./type-check";
 
 export class ProvideConfig {
     public start: number;
@@ -29,15 +31,16 @@ export class CheckEffectField {
     private yaml: YAMLNode;
     public myParser: MyParser;
     public diagnostic: Diagnostic[] = [];
-
-    constructor(document: TextDocument, offset: number, yaml: YAMLNode, myParser: MyParser) {
+    private grammar: GrammarColor;
+    constructor(grammar: GrammarColor, document: TextDocument, offset: number, yaml: YAMLNode, myParser: MyParser) {
+        this.grammar = grammar;
         this.document = document;
         this.offset = offset;
         this.yaml = yaml;
         this.myParser = myParser;
     }
-    private addDiagnostic(began: number, end: number, message: string) {
-        const range = new Range(this.document.positionAt(began + this.offset), this.document.positionAt(end + this.offset));
+    public addDiagnostic(began: number, end: number, message: string) {
+        const range = this.createRange(began, end);
         const diagnostic = new Diagnostic(range, message);
         this.diagnostic.push(diagnostic);
     }
@@ -92,29 +95,36 @@ export class CheckEffectField {
             }
             this.checkArray(yamlNode as yaml.YAMLSequence, scheme);
         } else {
+            const opts = new CheckOptions(yamlNode);
+            opts.key = key;
+            opts.scheme = scheme;
+            opts.diagnosticCallback = this.addDiagnostic.bind(this);
+            opts.itemCallback = (kind: GrammarYamlKind, node: yaml.YAMLNode) => {
+                this.addGrammarValueColor(kind, node);
+            };
             if (scheme.type === ICompletionType.String) {
                 // string
-                this.checkString(yamlNode, scheme, key);
+                TypeCheck.checkString(opts);
             } else if (scheme.type === ICompletionType.Number) {
                 // number
-                this.checkNumber(yamlNode, scheme, key);
+                TypeCheck.checkNumber(opts);
             } else if (scheme.type === ICompletionType.Bool) {
                 // boolean
-                this.checkBool(yamlNode, scheme, key);
+                TypeCheck.checkBool(opts);
             } else if (scheme.type === ICompletionType.Vec2) {
                 // vec2
-                this.checkVec(yamlNode, scheme, key, 2);
+                TypeCheck.checkVec(2, opts);
             } else if (scheme.type === ICompletionType.Vec3) {
                 // vec3
-                this.checkVec(yamlNode, scheme, key, 3);
+                TypeCheck.checkVec(3, opts);
             } else if (scheme.type === ICompletionType.Vec4) {
                 // vec4
-                this.checkVec(yamlNode, scheme, key, 4);
+                TypeCheck.checkVec(4, opts);
             } else if (scheme.type === ICompletionType.String_Number_Bool_Vec2_Vec3_Vec4) {
                 // string_number_bool_vec2_vec3_vec4
-                this.checkScalar(yamlNode, scheme, key, true);
+                TypeCheck.checkScalar(opts);
             } else if (scheme.type === ICompletionType.Vec2_Vec3_Vec4) {
-                this.checkVector(yamlNode, scheme, key, true);
+                TypeCheck.checkVector(opts);
             }
             if (scheme.check) {
                 const result = scheme.check(this, yamlNode);
@@ -126,130 +136,6 @@ export class CheckEffectField {
             }
         }
     }
-    private _checkEmpty(yamlNode: yaml.YAMLNode, key: string, diagnostic: boolean = true): boolean {
-        if (yamlNode.startPosition === -1 || yamlNode.endPosition === -1) {
-            diagnostic && this.addDiagnostic(yamlNode.parent.key.startPosition, yamlNode.parent.key.endPosition, `${key}不能为空`);
-            return false;
-        }
-        return true;
-    }
-    public checkVector(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true, diagnosticPrefix: string = ""): boolean {
-        if (!this._checkEmpty(yamlNode, key, diagnostic)) {
-            return false;
-        }
-        if (this.checkVec(yamlNode, scheme, key, 2, false, diagnosticPrefix)) {
-            return true;
-        }
-        if (this.checkVec(yamlNode, scheme, key, 3, false, diagnosticPrefix)) {
-            return true;
-        }
-        if (this.checkVec(yamlNode, scheme, key, 4, false, diagnosticPrefix)) {
-            return true;
-        }
-        diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `${diagnosticPrefix}${key}的类型无效`);
-        return false;
-    }
-
-    private checkScalar(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true): boolean {
-        if (!this._checkEmpty(yamlNode, key, diagnostic)) {
-            return false;
-        }
-        if (this.checkString(yamlNode, scheme, key, false)) {
-            return true;
-        }
-        if (this.checkNumber(yamlNode, scheme, key, false)) {
-            return true;
-        }
-        if (this.checkBool(yamlNode, scheme, key, false)) {
-            return true;
-        }
-        if (this.checkVec(yamlNode, scheme, key, 2, false)) {
-            return true;
-        }
-        if (this.checkVec(yamlNode, scheme, key, 3, false)) {
-            return true;
-        }
-        if (this.checkVec(yamlNode, scheme, key, 4, false)) {
-            return true;
-        }
-        diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `${key}的类型无效`);
-        return false;
-    }
-    private checkString(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true): boolean {
-        if (!this._checkEmpty(yamlNode, key, diagnostic)) {
-            return false;
-        }
-        if (yamlNode.kind !== yaml.Kind.SCALAR) {
-            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
-            return false;
-        }
-        const scalar: yaml.YAMLScalar = yamlNode as yaml.YAMLScalar;
-        const str = scalar.value;
-        if (!isString(str)) {
-            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
-            return false;
-        }
-        if (scheme.values) {
-            if (!scheme.values.find(el => el === str)) {
-                diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `${str}必须是[${scheme.values.join(', ')}]中的一个`);
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private checkBool(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true): boolean {
-        if (!this._checkEmpty(yamlNode, key, diagnostic)) {
-            return false;
-        }
-        if (yamlNode.kind !== yaml.Kind.SCALAR) {
-            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
-            return false;
-        }
-        const scalar: yaml.YAMLScalar = yamlNode as yaml.YAMLScalar;
-        if (scalar.value !== 'true' && scalar.value !== 'false') {
-            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `必须是${scheme.type}`);
-            return false;
-        }
-        return true;
-    }
-
-    public checkVec(yamlNode: yaml.YAMLNode, scheme: Scheme, key: string, num: number, diagnostic: boolean = true, diagnosticPrefix: string = ""): boolean {
-        if (!this._checkEmpty(yamlNode, key, diagnostic)) {
-            return false;
-        }
-        if (yamlNode.kind !== yaml.Kind.SEQ) {
-            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `${diagnosticPrefix}必须是${scheme.type}`);
-            return false;
-        }
-        const seq: yaml.YAMLSequence = yamlNode as yaml.YAMLSequence;
-        if (seq.items.length !== num) {
-            diagnostic && this.addDiagnostic(yamlNode.startPosition, yamlNode.endPosition, `${diagnosticPrefix}必须是${scheme.type}`);
-            return false;
-        }
-        let ret = true;
-        for (let i = 0; i < seq.items.length; i++) {
-            const item = seq.items[i];
-            if (!this.checkNumber(item, scheme, key, diagnostic, diagnosticPrefix)) {
-                ret = false;
-            }
-        }
-        return ret;
-    }
-    private checkNumber(item: yaml.YAMLNode, scheme: Scheme, key: string, diagnostic: boolean = true, diagnosticPrefix: string = ""): boolean {
-        if (!this._checkEmpty(item, key, diagnostic)) {
-            return false;
-        }
-        if (item.kind !== yaml.Kind.SCALAR) {
-            diagnostic && this.addDiagnostic(item.startPosition, item.endPosition, `${diagnosticPrefix}必须是常量`);
-            return false;
-        }
-        if (!isNumber(item.value)) {
-            diagnostic && this.addDiagnostic(item.startPosition, item.endPosition, `${diagnosticPrefix}必须是数值`);
-            return false;
-        }
-        return true;
-    }
     private checkArray(data: yaml.YAMLSequence, scheme: Scheme) {
         for (let i = 0; i < data.items.length; i++) {
             const item = data.items[i];
@@ -260,6 +146,17 @@ export class CheckEffectField {
                 console.log('unknown');
             }
         }
+    }
+    private createRange(began: number, end: number): Range {
+        return new Range(this.document.positionAt(began + this.offset), this.document.positionAt(end + this.offset));
+    }
+    private addGrammarValueColor(kind: GrammarYamlKind, node: yaml.YAMLNode) {
+        const valueRange = this.createRange(node.startPosition, node.endPosition);
+        this.grammar.add(kind, valueRange);
+    }
+    private addGrammarKeyColor(kind: yaml.Kind, node: yaml.YAMLNode) {
+        const range = this.createRange(node.startPosition, node.endPosition);
+        this.grammar.addByYamlKind(kind, range);
     }
     private checkMap(map: yaml.YamlMap, scheme: Scheme) {
         const missingKeys: string[] = [];
@@ -274,6 +171,8 @@ export class CheckEffectField {
         for (let i = 0; i < map.mappings.length; i++) {
             const mapping = map.mappings[i];
             const mapping_key = mapping.key.value;
+            // 语法着色
+            this.addGrammarKeyColor(map.kind, mapping.key);
             if (!isVarName(mapping_key)) {
                 this.addDiagnostic(mapping.key.startPosition, mapping.key.endPosition, `无效的名字:${mapping_key}`);
             }
@@ -307,6 +206,7 @@ export class CheckEffectField {
             });
         }
     }
+
     private getHoverString(scheme: Scheme) {
         let hoverString = "";
         if (scheme.desc) {
