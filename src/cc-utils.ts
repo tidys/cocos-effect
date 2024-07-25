@@ -361,7 +361,7 @@ export function hoverProvider(_textDocumentPosition: TextDocumentPositionParams)
         }
 
         return {
-            contents: [
+            contents: [] || [
                 {
                     language: 'c',
                     value: word,

@@ -21,7 +21,7 @@
           },
           "patterns": [
             {
-              "include": "source.yaml"
+              
             }
           ]
         },

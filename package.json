@@ -22,6 +22,9 @@
         "onCommand:CocosEffect.restartLSP",
         "onCommand:CocosEffect.compileEffect"
     ],
+    "capabilities": {
+        "hoverProvider": "true"
+    },
     "contributes": {
         "languages": [
             {
@@ -91,6 +94,10 @@
             {
                 "command": "CocosEffect.compileEffect",
                 "title": "CocosEffect: compile effect"
+            },
+            {
+                "command": "CocosEffect.inspectSyntaxType",
+                "title": "CocosEffect: inspect syntax type"
             }
         ],
         "configuration": {
@@ -135,13 +142,17 @@
         "compile": "webpack --mode development",
         "vscode:prepublish": "webpack --mode production",
         "lint": "eslint ./ --ext .ts,.tsx",
-        "watch": "webpack --mode development --watch"
+        "watch": "webpack --mode development --watch",
+        "antlr": "antlr4ts -o ./src/antlr -no-listener -visitor ./syntaxes/CocosEffect.g4"
     },
     "dependencies": {
+        "antlr4ts": "^0.5.0-alpha.4",
+        "antlr4ts-cli": "^0.5.0-alpha.4",
         "vscode-languageclient": "^7.0.0",
         "vscode-languageserver": "^7.0.0",
         "vscode-languageserver-textdocument": "^1.0.4",
-        "vscode-uri": "^3.0.2"
+        "vscode-uri": "^3.0.2",
+        "yaml-ast-parser": "^0.0.43"
     },
     "devDependencies": {
         "@types/node": "^16.11.7",

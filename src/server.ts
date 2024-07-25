@@ -10,6 +10,8 @@ import {
     DidChangeConfigurationNotification,
     TextDocumentSyncKind,
     InitializeResult,
+    Diagnostic,
+    DiagnosticSeverity,
 } from 'vscode-languageserver/node';
 
 import {
@@ -39,6 +41,9 @@ import {
     completionResolver,
     completionProvider,
 } from './cc-utils';
+import { join } from 'path';
+import { existsSync } from 'fs';
+import { exec, execSync } from 'child_process';
 
 export let DefaultEngineDirectory = '';
 
@@ -223,19 +228,56 @@ documents.onDidClose(e => {
     }
 });
 
-// documents.onDidChangeContent(change => {
-// 	const document = change.document;
-// 	// TODO: we need to check if the changed position is a include statement or not
-// });
+documents.onDidChangeContent(change => {
+    const document = change.document;
+    // TODO: we need to check if the changed position is a include statement or not
+    let validator = "";
+    if (process.platform === 'win32') {
+        validator = join(__dirname, '../static/linter/glslangValidator.exe');
+    } else {
+        validator = join(__dirname, '../static/linter/glslangValidator');
+    }
+    if (!existsSync(validator)) {
+        return;
+    }
+    let text = "";
+    const result = exec(`${validator} -h`);
+    let error = false;
+    result.stdout?.on('data', (data: string) => {
+        text += data;
+    });
+    result.stderr?.on('data', (data: string) => { error = true; });
+    result.stdout?.on('close', async () => {
+        if (error) {
+            connection.console.log("error");
+            return;
+        }
+        console.log(text);
 
-// documents.onDidSave(change => {
-// 	// unwind to obtain the relations
-// 	// unWindProgram(change.document.getText());
-// });
+        const diagnostics: Diagnostic[] = [];
+        const diagnostic: Diagnostic = {
+            severity: DiagnosticSeverity.Error,
+            range: {
+                start: document.positionAt(0),
+                end: document.positionAt(5),
+            },
+            message: 'Found error keyword',
+            source: 'ex',
+        };
+        diagnostics.push(diagnostic);
+        // connection.sendDiagnostics({ uri: document.uri, diagnostics });
+    });
+    console.log(result.toString());
+});
 
-// connection.onDidChangeWatchedFiles(_change => {
-// 	// 
-// });
+documents.onDidSave(change => {
+    // unwind to obtain the relations
+    // unWindProgram(change.document.getText());
+});
+
+connection.onDidChangeWatchedFiles(_change => {
+    // 
+});
 
 connection.onCompletion(completionProvider);
 
